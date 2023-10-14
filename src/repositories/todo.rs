@@ -1,16 +1,8 @@
+use super::RepositoryError;
 use axum::async_trait;
 use serde::{Deserialize, Serialize};
 use sqlx::{FromRow, PgPool};
-use thiserror::Error;
 use validator::Validate;
-
-#[derive(Debug, Error)]
-enum RepositoryError {
-    #[error("Unexpected Error: [{0}]")]
-    Unexpected(String),
-    #[error("NotFound, id is {0}")]
-    NotFound(i32),
-}
 
 #[async_trait]
 pub trait TodoRepository: Clone + std::marker::Send + std::marker::Sync + 'static {
@@ -50,7 +42,7 @@ pub struct TodoRepositoryForDb {
 
 impl TodoRepositoryForDb {
     pub fn new(pool: PgPool) -> Self {
-        TodoRepositoryForDb { pool }
+        Self { pool }
     }
 }
 
@@ -192,7 +184,7 @@ mod test {
         assert_eq!(todo.text, updated_text);
 
         // delete
-        let _ = repository
+        repository
             .delete(todo.id)
             .await
             .expect("[delete] returned Err");
@@ -248,7 +240,7 @@ pub mod test_utils {
 
     impl TodoRepositoryForMemory {
         pub fn new() -> Self {
-            TodoRepositoryForMemory {
+            Self {
                 store: Arc::default(),
             }
         }
