@@ -18,6 +18,7 @@ struct TodoFromRow {
     id: i32,
     text: String,
     completed: bool,
+    priority: i32,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, FromRow)]
@@ -25,6 +26,7 @@ pub struct TodoWithLabelFromRow {
     id: i32,
     text: String,
     completed: bool,
+    priority: i32,
     label_id: Option<i32>,
     label_name: Option<String>,
 }
@@ -59,6 +61,7 @@ fn fold_entities(rows: Vec<TodoWithLabelFromRow>) -> Vec<TodoEntity> {
             id: row.id,
             text: row.text.clone(),
             completed: row.completed,
+            priority: row.priority,
             labels,
         });
     }
@@ -70,6 +73,7 @@ pub struct TodoEntity {
     pub id: i32,
     pub text: String,
     pub completed: bool,
+    pub priority: i32,
     pub labels: Vec<Label>,
 }
 
@@ -87,6 +91,7 @@ pub struct UpdateTodo {
     #[validate(length(max = 100, message = "Over text length"))]
     text: Option<String>,
     completed: Option<bool>,
+    priority: Option<i32>,
     labels: Option<Vec<i32>>,
 }
 
@@ -107,8 +112,8 @@ impl TodoRepository for TodoRepositoryForDb {
         let tx = self.pool.begin().await?;
         let row = sqlx::query_as::<_, TodoFromRow>(
             r#"
-insert into todos (text, completed)
-values ($1, false)
+insert into todos (text, completed, priority)
+values ($1, false, 1)
 returning *
             "#,
         )
@@ -180,13 +185,14 @@ order by todos.id desc;
         let old_todo = self.find(id).await?;
         sqlx::query(
             r#"
-update todos set text=$1, completed=$2
-where id=$3
+update todos set text=$1, completed=$2, priority=$3
+where id=$4
 returning *
             "#,
         )
         .bind(payload.text.unwrap_or(old_todo.text))
         .bind(payload.completed.unwrap_or(old_todo.completed))
+        .bind(payload.priority.unwrap_or(old_todo.priority))
         .bind(id)
         .fetch_one(&self.pool)
         .await?;
@@ -282,6 +288,7 @@ mod test {
                 id: 1,
                 text: String::from("todo 1"),
                 completed: false,
+                priority: 1,
                 label_id: Some(label_1.id),
                 label_name: Some(label_1.name.clone()),
             },
@@ -289,6 +296,7 @@ mod test {
                 id: 1,
                 text: String::from("todo 1"),
                 completed: false,
+                priority: 1,
                 label_id: Some(label_2.id),
                 label_name: Some(label_2.name.clone()),
             },
@@ -296,6 +304,7 @@ mod test {
                 id: 2,
                 text: String::from("todo 2"),
                 completed: false,
+                priority: 1,
                 label_id: Some(label_1.id),
                 label_name: Some(label_1.name.clone()),
             },
@@ -308,12 +317,14 @@ mod test {
                     id: 1,
                     text: String::from("todo 1"),
                     completed: false,
+                    priority: 1,
                     labels: vec![label_1.clone(), label_2.clone()],
                 },
                 TodoEntity {
                     id: 2,
                     text: String::from("todo 2"),
                     completed: false,
+                    priority: 1,
                     labels: vec![label_1.clone()],
                 },
             ],
@@ -366,6 +377,7 @@ returning *
             .expect("[create] returned Err");
         assert_eq!(created.text, todo_text);
         assert!(!created.completed);
+        assert_eq!(created.priority, 1);
         assert_eq!(*created.labels.first().unwrap(), label_1);
 
         // find
@@ -382,12 +394,14 @@ returning *
 
         // update
         let updated_text = "[crud_scenario] updated text";
+        let updated_priority = 2;
         let todo = repository
             .update(
                 todo.id,
                 UpdateTodo {
                     text: Some(updated_text.to_string()),
                     completed: Some(true),
+                    priority: Some(2),
                     labels: Some(vec![]),
                 },
             )
@@ -395,6 +409,7 @@ returning *
             .expect("[update] returned Err");
         assert_eq!(created.id, todo.id);
         assert_eq!(todo.text, updated_text);
+        assert_eq!(todo.priority, updated_priority);
         assert!(todo.labels.len() == 0);
 
         // delete
@@ -446,6 +461,7 @@ pub mod test_utils {
                 id,
                 text,
                 completed: false,
+                priority: 1,
                 labels,
             }
         }
@@ -521,6 +537,7 @@ pub mod test_utils {
             let todo = store.get(&id).context(RepositoryError::NotFound(id))?;
             let text = payload.text.unwrap_or(todo.text.clone());
             let completed = payload.completed.unwrap_or(todo.completed);
+            let priority = payload.priority.unwrap_or(todo.priority);
             let labels = match payload.labels {
                 Some(label_ids) => self.resolve_labels(label_ids),
                 None => todo.labels.clone(),
@@ -529,6 +546,7 @@ pub mod test_utils {
                 id,
                 text,
                 completed,
+                priority,
                 labels,
             };
             store.insert(id, todo.clone());
@@ -585,6 +603,7 @@ pub mod test_utils {
                     UpdateTodo {
                         text: Some(text.clone()),
                         completed: Some(true),
+                        priority: Some(2),
                         labels: Some(vec![]),
                     },
                 )
@@ -595,6 +614,7 @@ pub mod test_utils {
                     id,
                     text,
                     completed: true,
+                    priority: 2,
                     labels: vec![],
                 },
                 todo
