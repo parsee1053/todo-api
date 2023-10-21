@@ -34,9 +34,9 @@ pub struct TodoWithLabelFromRow {
 fn fold_entities(rows: Vec<TodoWithLabelFromRow>) -> Vec<TodoEntity> {
     let mut rows = rows.iter();
     let mut accum: Vec<TodoEntity> = vec![];
-    'outer: while let Some(row) = rows.next() {
+    'outer: for row in &mut rows {
         let mut todos = accum.iter_mut();
-        while let Some(todo) = todos.next() {
+        for todo in &mut todos {
             // idが一致=Todoに紐づくラベルが複数存在している
             if todo.id == row.id {
                 todo.labels.push(Label {
@@ -337,7 +337,7 @@ mod test {
         let database_url = &env::var("DATABASE_URL").expect("undefined [DATABASE_URL]");
         let pool = PgPool::connect(database_url)
             .await
-            .expect(&format!("fail connect database, url is [{}]", database_url));
+            .unwrap_or_else(|_| panic!("fail connect database, url is [{}]", database_url));
 
         // label data prepare
         let label_name = String::from("test label");
@@ -353,7 +353,7 @@ select * from labels where name = $1
         let label_1 = if let Some(label) = optional_label {
             label
         } else {
-            let label = sqlx::query_as::<_, Label>(
+            sqlx::query_as::<_, Label>(
                 r#"
 insert into labels ( name )
 values ( $1 )
@@ -363,8 +363,7 @@ returning *
             .bind(label_name)
             .fetch_one(&pool)
             .await
-            .expect("Failed to insert label data.");
-            label
+            .expect("Failed to insert label data.")
         };
 
         let repository = TodoRepositoryForDb::new(pool.clone());
@@ -410,7 +409,7 @@ returning *
         assert_eq!(created.id, todo.id);
         assert_eq!(todo.text, updated_text);
         assert_eq!(todo.priority, updated_priority);
-        assert!(todo.labels.len() == 0);
+        assert!(todo.labels.is_empty());
 
         // delete
         repository
@@ -429,7 +428,7 @@ select * from todos where id=$1
         .fetch_all(&pool)
         .await
         .expect("[delete] todo_labels fetch error");
-        assert!(todo_rows.len() == 0);
+        assert!(todo_rows.is_empty());
 
         let rows = sqlx::query(
             r#"
@@ -440,7 +439,7 @@ select * from todo_labels where todo_id=$1
         .fetch_all(&pool)
         .await
         .expect("[delete] todo_labels fetch error");
-        assert!(rows.len() == 0);
+        assert!(rows.is_empty());
     }
 }
 
@@ -522,14 +521,14 @@ pub mod test_utils {
             let store = self.read_store_ref();
             let todo = store
                 .get(&id)
-                .map(|todo| todo.clone())
+                .cloned()
                 .ok_or(RepositoryError::NotFound(id))?;
             Ok(todo)
         }
 
         async fn all(&self) -> anyhow::Result<Vec<TodoEntity>> {
             let store = self.read_store_ref();
-            Ok(Vec::from_iter(store.values().map(|todo| todo.clone())))
+            Ok(Vec::from_iter(store.values().cloned()))
         }
 
         async fn update(&self, id: i32, payload: UpdateTodo) -> anyhow::Result<TodoEntity> {

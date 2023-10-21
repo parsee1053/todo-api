@@ -31,10 +31,9 @@ async fn main() {
 
     let database_url = &env::var("DATABASE_URL").expect("undefined [DATABASE_URL]");
     tracing::debug!("start connect database...");
-    let pool = PgPool::connect(database_url).await.expect(&format!(
-        "fail to connect database, url is [{}]",
-        database_url
-    ));
+    let pool = PgPool::connect(database_url)
+        .await
+        .unwrap_or_else(|_| panic!("fail to connect database, url is [{}]", database_url));
 
     let app = create_app(
         TodoRepositoryForDb::new(pool.clone()),
@@ -116,7 +115,7 @@ mod test {
         let bytes = hyper::body::to_bytes(res.into_body()).await.unwrap();
         let body: String = String::from_utf8(bytes.to_vec()).unwrap();
         let todo: TodoEntity = serde_json::from_str(&body)
-            .expect(&format!("cannot convert Todo instance. body: {}", body));
+            .unwrap_or_else(|_| panic!("cannot convert Todo instance. body: {}", body));
         todo
     }
 
@@ -124,7 +123,7 @@ mod test {
         let bytes = hyper::body::to_bytes(res.into_body()).await.unwrap();
         let body: String = String::from_utf8(bytes.to_vec()).unwrap();
         let label: Label = serde_json::from_str(&body)
-            .expect(&format!("cannot convert Label instance. body: {}", body));
+            .unwrap_or_else(|_| panic!("cannot convert Label instance. body: {}", body));
         label
     }
 
@@ -200,7 +199,7 @@ mod test {
         let bytes = hyper::body::to_bytes(res.into_body()).await.unwrap();
         let body: String = String::from_utf8(bytes.to_vec()).unwrap();
         let todo: Vec<TodoEntity> = serde_json::from_str(&body)
-            .expect(&format!("cannot convert Todo instance. body: {}", body));
+            .unwrap_or_else(|_| panic!("cannot convert Todo instance. body: {}", body));
         assert_eq!(vec![expected], todo);
     }
 
@@ -285,7 +284,7 @@ mod test {
         let bytes = hyper::body::to_bytes(res.into_body()).await.unwrap();
         let body: String = String::from_utf8(bytes.to_vec()).unwrap();
         let label: Vec<Label> = serde_json::from_str(&body)
-            .expect(&format!("cannot convert Label instance. body {}", body));
+            .unwrap_or_else(|_| panic!("cannot convert Label instance. body {}", body));
         assert_eq!(vec![expected], label);
     }
 

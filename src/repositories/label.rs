@@ -109,7 +109,7 @@ mod test {
         let database_url = &env::var("DATABASE_URL").expect("undefined [DATABASE_URL]");
         let pool = PgPool::connect(database_url)
             .await
-            .expect(&format!("fail connect database, url is [{}]", database_url));
+            .unwrap_or_else(|_| panic!("fail connect database, url is [{}]", database_url));
 
         let repository = LabelRepositoryForDb::new(pool);
         let label_text = "test_label";
@@ -189,7 +189,7 @@ pub mod test_utils {
 
         async fn all(&self) -> anyhow::Result<Vec<Label>> {
             let store = self.read_store_ref();
-            Ok(Vec::from_iter(store.values().map(|label| label.clone())))
+            Ok(Vec::from_iter(store.values().cloned()))
         }
 
         async fn delete(&self, id: i32) -> anyhow::Result<()> {
